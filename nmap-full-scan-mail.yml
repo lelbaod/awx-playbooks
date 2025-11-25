@@ -1,0 +1,52 @@
+- hosts: all
+  become: yes
+
+  vars:
+    # Réseau à scanner depuis chaque Pi
+    network_to_scan: "192.168.1.0/24"
+
+    # Fichier de sortie sur le Pi
+    output_file: "/tmp/nmap_full_scan_{{ inventory_hostname }}.txt"
+
+    # SMTP Gmail (mettre les vrais dans AWX)
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    smtp_user: "monitoring-zabbix@lyceelyautey.org"
+    smtp_password: "{{ smtp_password }}"   # défini dans AWX, pas dans Git
+    mail_to: "lelbaod@lyceelyautey.org"
+    mail_from: "scanner-{{ inventory_hostname }}@lyceelyautey.org"
+
+  tasks:
+    - name: Ensure nmap is installed
+      ansible.builtin.apt:
+        name: nmap
+        state: present
+        update_cache: yes
+
+    - name: Run full TCP Nmap scan on local network (can be long)
+      ansible.builtin.command: "nmap -p- -T4 {{ network_to_scan }}"
+      register: scan_result
+
+    - name: Save scan output to file on the Pi
+      ansible.builtin.copy:
+        content: "{{ scan_result.stdout }}"
+        dest: "{{ output_file }}"
+
+    - name: Send scan report by email via Gmail
+      ansible.builtin.mail:
+        host: "{{ smtp_host }}"
+        port: "{{ smtp_port }}"
+        username: "{{ smtp_user }}"
+        password: "{{ smtp_password }}"
+        to: "{{ mail_to }}"
+        from: "{{ mail_from }}"
+        subject: "Nmap full scan - {{ inventory_hostname }}"
+        body: |
+          Machine : {{ inventory_hostname }}
+          Réseau scanné : {{ network_to_scan }}
+
+          ----------------------------
+          Résultat Nmap :
+          ----------------------------
+          {{ scan_result.stdout }}
+        secure: starttls
