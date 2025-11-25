@@ -1,20 +1,15 @@
 - hosts: all
   become: yes
 
+  # AUCUN défaut ici, tout vient d'AWX
   vars:
-    # Réseau à scanner depuis chaque Pi
-    network_to_scan: "192.168.1.0/24"
-
-    # Fichier de sortie sur le Pi
-    output_file: "/tmp/nmap_full_scan_{{ inventory_hostname }}.txt"
-
-    # SMTP Gmail (mettre les vrais dans AWX)
-    smtp_host: "smtp.gmail.com"
-    smtp_port: 587
-    smtp_user: "monitoring-zabbix@lyceelyautey.org"
-    smtp_password: "{{ smtp_password }}"   # défini dans AWX, pas dans Git
-    mail_to: "lelbaod@lyceelyautey.org"
-    mail_from: "scanner-{{ inventory_hostname }}@lyceelyautey.org"
+    smtp_host: "{{ smtp_host }}"
+    smtp_port: "{{ smtp_port }}"
+    smtp_user: "{{ smtp_user }}"
+    smtp_password: "{{ smtp_password }}"
+    mail_to: "{{ mail_to }}"
+    mail_from: "{{ mail_from }}"
+    network_to_scan: "{{ network_to_scan }}"
 
   tasks:
     - name: Ensure nmap is installed
@@ -23,16 +18,16 @@
         state: present
         update_cache: yes
 
-    - name: Run full TCP Nmap scan on local network (can be long)
+    - name: Run full TCP Nmap scan
       ansible.builtin.command: "nmap -p- -T4 {{ network_to_scan }}"
       register: scan_result
 
-    - name: Save scan output to file on the Pi
+    - name: Save scan output to file
       ansible.builtin.copy:
         content: "{{ scan_result.stdout }}"
-        dest: "{{ output_file }}"
+        dest: "/tmp/nmap_full_scan_{{ inventory_hostname }}.txt"
 
-    - name: Send scan report by email via Gmail
+    - name: Send scan report by email
       ansible.builtin.mail:
         host: "{{ smtp_host }}"
         port: "{{ smtp_port }}"
@@ -40,7 +35,7 @@
         password: "{{ smtp_password }}"
         to: "{{ mail_to }}"
         from: "{{ mail_from }}"
-        subject: "Nmap full scan - {{ inventory_hostname }}"
+        subject: "Nmap scan report - {{ inventory_hostname }}"
         body: |
           Machine : {{ inventory_hostname }}
           Réseau scanné : {{ network_to_scan }}
