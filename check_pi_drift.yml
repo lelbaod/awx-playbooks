@@ -1,13 +1,13 @@
 ---
 - name: Compare les configs des Pi avec la baseline de pi1
-  hosts: pies
+  hosts: pis          # ⚠️ Assure-toi d'avoir un groupe 'pis' dans ton inventaire AWX
   gather_facts: false
 
   vars:
-    # Pi de référence
+    # Pi de référence (doit exister dans l'inventaire)
     baseline_host: pi1-bizet
 
-    # Fichiers à contrôler (à adapter à ton infra)
+    # Fichiers à contrôler
     files_to_check:
       - /etc/nebula/config.yml
       - /etc/zabbix/zabbix_agentd.conf
@@ -36,9 +36,11 @@
       vars:
         baseline_for_file: >-
           {{
-            (baseline_stats.results
-             | selectattr('item', 'equalto', item.item)
-             | first).stat.checksum
+            (
+              baseline_stats.results
+              | selectattr('item', 'equalto', item.item)
+              | first
+            ).stat.checksum | default('MISSING_BASELINE', true)
           }}
       set_fact:
         pi_drift: >-
@@ -46,19 +48,23 @@
             (pi_drift | default([])) + [{
               'file': item.item,
               'baseline_checksum': baseline_for_file,
-              'current_checksum': item.stat.checksum,
-              'status': 'OK' if item.stat.checksum == baseline_for_file else 'DRIFT'
+              'current_checksum': item.stat.checksum | default('MISSING_TARGET', true),
+              'status': (
+                'OK'
+                if (item.stat.checksum is defined and item.stat.checksum == baseline_for_file)
+                else 'DRIFT'
+              )
             }]
           }}
       loop: "{{ current_stats.results }}"
 
     - name: Afficher le drift pour cet hôte
-      debug:
+      ansible.builtin.debug:
         msg: "{{ inventory_hostname }} -> {{ pi_drift }}"
 
     # OPTIONNEL : faire échouer le job si drift détecté
     - name: Échouer si drift détecté sur cet hôte
-      fail:
+      ansible.builtin.fail:
         msg: "Drift détecté sur {{ inventory_hostname }} (voir tâche 'Afficher le drift')"
       when: >
         (pi_drift | selectattr('status', 'equalto', 'DRIFT') | list | length) > 0
