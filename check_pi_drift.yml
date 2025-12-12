@@ -5,7 +5,7 @@
 
   vars:
     # Pi de référence
-    baseline_host: pi1
+    baseline_host: pi1-bizet
 
     # Fichiers à contrôler (à adapter à ton infra)
     files_to_check:
